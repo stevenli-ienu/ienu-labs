@@ -1,11 +1,9 @@
 import { describe, it, expect } from '@jest/globals';
 
-// --- Context: The "Order" Entity Pattern (Sanitized from original GameBet logic) ---
+// --- Context: The "Order" Entity Pattern ---
+// Scenario: We have an Entity with nested data (metadata).
+// We want to update it partially.
 
-/**
- * Simulates a TypeORM Entity.
- * In a real app, this would extend BaseEntity or be decorated with @Entity
- */
 class Order {
   id: string;
   amount: number;
@@ -15,98 +13,103 @@ class Order {
   constructor(partial: Partial<Order>) {
     Object.assign(this, partial);
   }
+
+  // A method we expect to exist on the object
+  isPaid(): boolean {
+    return this.status === 'PAID';
+  }
 }
 
-/**
- * Simulates the specific problem scenario:
- * A partial update function that uses the Spread Operator blindly.
- */
-function riskyUpdateConfig(original: Order, updates: Partial<Order>): Order {
-  // ❌ BAD PATTERN: Spreading the entity directly
-  // logic: typeorm often creates a new object or the spread might overwrite 
-  // getters/setters or lose prototype methods if not careful (though pure JS objects are mostly fine).
-  // The REAL risk in the original context was usually about losing 
-  // properties that weren't enumerable or strictly typed in the Partial, 
-  // or unintentionally overwriting fields with undefined.
-  
-  // For this demo, let's simulate the issue where we accidentally 
-  // overwrite a nested object entirely instead of merging it, 
-  // OR we try to spread a class instance into a plain object 
-  // which implies we lose method context if we had any.
-  
-  return { ...original, ...updates }; 
+// --- 🚧 BAD PATTERN (Risky Spread) 🚧 ---
+// Problem: The Spread Operator (...) does a SHALLOW copy.
+// 1. It wipes out nested properties if not careful.
+// 2. It converts a Class Instance into a Plain Object (losing methods).
+
+function riskyUpdateOrder(original: Order, updates: Partial<Order>): any {
+  // ❌ Risk 1: '...original' creates a plain object, stripping 'isPaid()' method.
+  // ❌ Risk 2: '...updates' will completely REPLACE 'metadata' object, not merge it.
+  return { ...original, ...updates };
 }
 
-/**
- * ✅ GOOD PATTERN: Explicit mapping or using a merge utility.
- * This ensures we control exactly what gets updated.
- */
-function safeUpdateConfig(original: Order, updates: Partial<Order>): Order {
-  // Explicitly assign fields we ALLOW to change
+// --- ✅ GOOD PATTERN (Explicit Update) ✅ ---
+// Solution: Use explicit assignment or deep merge utilities.
+// Maintain the Class instance prototype.
+
+function safeUpdateOrder(original: Order, updates: Partial<Order>): Order {
+  // 1. Maintain Prototype Chain (New Instance)
   const updated = new Order(original);
-  
+
+  // 2. Explicit Assignment (Safety Check)
   if (updates.status) updated.status = updates.status;
   if (updates.amount) updated.amount = updates.amount;
-  
-  // Deep merge for metadata if needed (simplified here)
+
+  // 3. Handle Nested Data (Deep Merge)
   if (updates.metadata) {
-    updated.metadata = { ...original.metadata, ...updates.metadata };
+    updated.metadata = {
+      ...original.metadata, // Keep existing keys
+      ...updates.metadata, // Overwrite only specific keys
+    };
   }
-  
+
   return updated;
 }
 
-describe('TypeScript Spread Operator Risks', () => {
-  it('Risk 1: Shallow Copy Destroys Nested Data (Metadata Overwrite)', () => {
-    // 1. Setup initial state
+// --- 🧪 TEST PROOF ---
+
+describe('TypeScript: Spread Operator Risks', () => {
+  it('RISK 1: Spread operator destroys Class Methods (Prototype Chain)', () => {
+    const order = new Order({ id: '1', amount: 100, status: 'PAID' });
+
+    // Action: Update using spread
+    const result = riskyUpdateOrder(order, { amount: 200 });
+
+    // Proof: The method isPaid() is gone because it's now a plain JSON object
+    // Expecting: "result.isPaid is not a function"
+    expect(() => result.isPaid()).toThrow();
+    expect(result).not.toBeInstanceOf(Order);
+  });
+
+  it('RISK 2: Shallow Copy destroys nested data (Metadata Loss)', () => {
+    // Setup: Order with existing metadata
     const order = new Order({
       id: 'o_123',
-      amount: 100,
-      status: 'PENDING',
       metadata: {
-        campaignId: 'summer_sale',
-        referrer: 'google'
-      }
+        campaign: 'summer_sale',
+        referrer: 'google', // 👈 Essential data
+      },
     });
 
-    // 2. The risky update
-    // We only wanted to add a 'traceId', but we spread a new object object into metadata
-    const updates: Partial<Order> = {
-      metadata: { traceId: 'xyz_999' } 
+    // Action: We want to ADD a traceId
+    const updates = {
+      metadata: { traceId: 'xyz_999' },
     };
 
-    const result = riskyUpdateConfig(order, updates);
+    // The risky function simply spreads the new metadata object over the old one
+    const result = riskyUpdateOrder(order, updates);
 
-    // 3. 💥 Assertion: Expect failure/data loss
-    // The referrer and campaignId are GONE because spread does a shallow replace of 'metadata'
-    expect(result.metadata.referrer).toBeUndefined(); 
+    // Proof: 'referrer' is LOST. It was fully replaced, not merged.
+    expect(result.metadata.referrer).toBeUndefined();
     expect(result.metadata.traceId).toBe('xyz_999');
   });
 
-  it('Safe Pattern: Deep Merge preserves nested data', () => {
-    // 1. Setup
+  it('SOLUTION: Safe Update preserves Prototype and Nested Data', () => {
     const order = new Order({
       id: 'o_123',
-      amount: 100,
       status: 'PENDING',
-      metadata: {
-        campaignId: 'summer_sale',
-        referrer: 'google'
-      }
+      metadata: { campaign: 'summer_sale' },
     });
 
-    // 2. The safe update
-    const updates: Partial<Order> = {
-        metadata: { traceId: 'xyz_999' }
-    };
-    
-    // safeUpdate simulates logic that handles deep merging manually or via library
-    const result = safeUpdateConfig(order, updates);
+    const result = safeUpdateOrder(order, {
+      status: 'PAID',
+      metadata: { traceId: 'safe_1' }, // Adding new key
+    });
 
-    // 3. ✅ Assertion: Data preserved
-    expect(result.metadata.referrer).toBe('google');
-    expect(result.metadata.traceId).toBe('xyz_999');
-    // And we return a real instance of Order
+    // Proof 1: Prototype preserved
     expect(result).toBeInstanceOf(Order);
+    expect(result.isPaid()).toBe(true);
+
+    // Proof 2: Nested data merged
+    expect(result.metadata.campaign).toBe('summer_sale'); // Preserved
+    expect(result.metadata.traceId).toBe('safe_1'); // Added
   });
 });

@@ -16,6 +16,10 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "es2022",
-    "customConditions": ["@ienu-labs/source"]
+    "customConditions": ["@ienu-labs/source"],
+    "paths": {
+      "@ienu-labs/refactoring-pocs": ["libs/refactoring-pocs/src/index.ts"],
+      "@ienu-labs/ts-risks": ["libs/ts-risks/src/index.ts"]
+    }
   }
 }

@@ -1,0 +1,39 @@
+{
+    "name": "ts-risks",
+    "$schema": "../../node_modules/nx/schemas/project-schema.json",
+    "sourceRoot": "libs/ts-risks/src",
+    "projectType": "library",
+    "tags": [],
+    "targets": {
+        "build": {
+            "executor": "@nx/js:swc",
+            "outputs": [
+                "{options.outputPath}"
+            ],
+            "options": {
+                "outputPath": "dist/libs/ts-risks",
+                "main": "libs/ts-risks/src/index.ts",
+                "tsConfig": "libs/ts-risks/tsconfig.lib.json",
+                "assets": [
+                    "libs/ts-risks/*.md"
+                ]
+            }
+        },
+        "test": {
+            "executor": "@nx/jest:jest",
+            "outputs": [
+                "{workspaceRoot}/coverage/{projectRoot}"
+            ],
+            "options": {
+                "jestConfig": "libs/ts-risks/jest.config.cts",
+                "passWithNoTests": true
+            }
+        },
+        "lint": {
+            "executor": "@nx/eslint:lint",
+            "outputs": [
+                "{options.outputFile}"
+            ]
+        }
+    }
+}
